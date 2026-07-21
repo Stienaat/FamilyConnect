@@ -294,13 +294,30 @@ class MainActivity : ComponentActivity() {
             updateButtons()
         }
         btnConfig.setOnClickListener {
-
             AdminDialog.show(
                 AdminDialogContext(
                     activity = this,
                     map = map,
                     statusView = txtStatus,
-                    attributionView = txtMapAttribution
+                    attributionView = txtMapAttribution,
+                    nameInput = nameInput,
+                    adminPin = ADMIN_PIN,
+                    defaultGroupCode = DEFAULT_GROUP_CODE,
+
+                    setAdminStatusView = { statusView ->
+                        adminStatusText = statusView
+                    },
+
+                    restartTracking = {
+                        stopService(
+                            Intent(
+                                this,
+                                TrackingService::class.java
+                            )
+                        )
+
+                        askPermissions()
+                    }
                 )
             )
         }
@@ -314,231 +331,7 @@ class MainActivity : ComponentActivity() {
             setColor(color)
         }
     }
-    fun showAdminDialog()  {
-        val prefs = getSharedPreferences("tracker", MODE_PRIVATE)
-
-        var language = prefs.getString("language", "nl") ?: "nl"
-
-        val pinInput = EditText(this).apply {
-            hint = "Beheer PIN"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        }
-
-        val codeInputAdmin = EditText(this).apply {
-            hint = if (language == "en") "Family code" else "Gezinscode"
-            setText(prefs.getString("group_code", DEFAULT_GROUP_CODE))
-            visibility = android.view.View.GONE
-        }
-
-        val mapLabel = TextView(this).apply {
-            text = if (language == "en") "Map" else "Kaart"
-            textSize = 14f
-            setPadding(0, 20, 0, 6)
-            visibility = android.view.View.GONE
-        }
-
-        val mapSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(
-                this@MainActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                MapSources.PROVIDERS.map { it.label }
-            )
-
-            val savedProvider = MapSources.getSelectedKey(this@MainActivity)
-            val selectedIndex = MapSources.PROVIDERS.indexOfFirst {
-                it.key == savedProvider
-            }.coerceAtLeast(0)
-
-            setSelection(selectedIndex)
-            visibility = android.view.View.GONE
-        }
-
-        val adminStatus = TextView(this).apply {
-            text = txtStatus.text
-            textSize = 13f
-            typeface = Typeface.MONOSPACE
-            setTextColor(Color.BLUE)
-            setPadding(0, 20, 0, 20)
-        }
-
-        adminStatusText = adminStatus
-
-        val readmeText = TextView(this).apply {
-            textSize = 13f
-            setPadding(0, 20, 0, 0)
-            movementMethod = ScrollingMovementMethod()
-        }
-
-        AdminDialogTexts.refresh(
-            language,
-            readmeText,
-            codeInputAdmin,
-            mapLabel
-        )
-        val btnNL = ImageButton(this).apply {
-            setImageResource(R.drawable.flag_nl)
-            background = null
-            setPadding(8, 8, 8, 8)
-            setOnClickListener {
-                language = "nl"
-                prefs.edit().putString("language", "nl").apply()
-
-                AdminDialogTexts.refresh(
-                    language,
-                    readmeText,
-                    codeInputAdmin,
-                    mapLabel
-                )
-            }
-        }
-
-        val btnEN = ImageButton(this).apply {
-            setImageResource(R.drawable.flag_en)
-            background = null
-            setPadding(8, 8, 8, 8)
-            setOnClickListener {
-                language = "en"
-                prefs.edit().putString("language", "en").apply()
-
-                AdminDialogTexts.refresh(
-                    language,
-                    readmeText,
-                    codeInputAdmin,
-                    mapLabel
-                )
-            }
-        }
-
-        val langRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-            addView(
-                btnNL,
-                LinearLayout.LayoutParams(90, 90).apply {
-                    setMargins(0, 0, 30, 0)
-                }
-            )
-
-            addView(
-                btnEN,
-                LinearLayout.LayoutParams(90, 90)
-            )
-        }
-
-        val scroll = ScrollView(this).apply {
-            addView(readmeText)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                500
-            )
-        }
-
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 25, 40, 10)
-
-            addView(langRow)
-            addView(pinInput)
-            addView(codeInputAdmin)
-            addView(mapLabel)
-            addView(mapSpinner)
-            addView(adminStatus)
-            addView(scroll)
-        }
-
-        val dialog =
-            android.app.AlertDialog.Builder(this)
-                .setTitle(if (language == "en") "Admin" else "Beheer")
-                .setView(box)
-                .setPositiveButton("✖\uFE0F", null)
-                .setNegativeButton(if (language == "en") "Cancel" else "❌", null)
-
-                .create()
-        dialog.window?.setBackgroundDrawable(
-            android.graphics.drawable.ColorDrawable(
-                android.graphics.Color.TRANSPARENT
-            )
-        )
-
-        dialog.setOnShowListener {
-
-            val okButton =
-                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-
-            okButton.setOnClickListener {
-
-                Toast.makeText(this, "OK geklikt", Toast.LENGTH_SHORT).show()
-
-                val enteredPin =
-                    pinInput.text.toString().trim()
-
-                if (codeInputAdmin.visibility == android.view.View.GONE) {
-
-                    if (enteredPin == ADMIN_PIN) {
-
-                        Toast.makeText(this, "PIN OK", Toast.LENGTH_SHORT).show()
-
-                        pinInput.visibility = android.view.View.GONE
-                        codeInputAdmin.visibility = android.view.View.VISIBLE
-                        mapLabel.visibility = android.view.View.VISIBLE
-                        mapSpinner.visibility = android.view.View.VISIBLE
-
-                        okButton.text =
-                            if (language == "en") "Save" else "Opslaan"
-
-                        dialog.setTitle(
-                            if (language == "en") "Family code" else "Gezinscode"
-                        )
-
-                    } else {
-                        pinInput.error =
-                            if (language == "en") "Wrong PIN" else "Foute PIN"
-                    }
-
-                } else {
-
-                    val newCode =
-                        codeInputAdmin.text.toString().trim()
-
-                    val selectedProvider =
-                        MapSources.PROVIDERS[mapSpinner.selectedItemPosition].key
-
-                    prefs.edit()
-                        .putString("group_code", newCode)
-                        .putString("device_name", nameInput.text.toString().trim())
-                        .putString(MapSources.PREF_KEY, selectedProvider)
-                        .commit()
-
-                    map.setTileSource(MapSources.get(this))
-                    txtMapAttribution.text = MapSources.getAttribution(this)
-                    map.invalidate()
-
-                    Toast.makeText(
-                        this,
-                        if (language == "en")
-                            "Saved"
-                        else
-                            "Opgeslagen",
-                        Toast.LENGTH_LONG
-                    ).show()
-
-                    stopService(Intent(this, TrackingService::class.java))
-                    askPermissions()
-
-                    dialog.dismiss()
-                }
-            }
-        }
-
-        dialog.setOnDismissListener {
-            adminStatusText = null
-        }
-
-        dialog.show()
-        dialog.window?.setBackgroundDrawableResource(
-            R.drawable.dialog_bg
-        )
-    }
+            
     private val permissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -693,6 +486,8 @@ class MainActivity : ComponentActivity() {
                             zoomedSosDevices.remove(name)
                         }
 
+
+
                         val marker = Marker(map).apply {
                             position = point
 
@@ -721,6 +516,8 @@ class MainActivity : ComponentActivity() {
 
                         map.overlayManager.add(marker)
                         markers[name] = marker
+
+
                     }
 
                     val status = info.toString()
