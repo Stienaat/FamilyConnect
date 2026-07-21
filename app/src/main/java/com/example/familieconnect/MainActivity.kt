@@ -10,7 +10,7 @@ import android.widget.LinearLayout
 import androidx.activity.ComponentActivity
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONArray
+
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -609,30 +609,18 @@ class MainActivity : ComponentActivity() {
     private fun loadTrackers(code: String) {
         thread {
             try {
-                val request = Request.Builder()
-                    .url("https://my-tracker-dc65.onrender.com/api/location?pin=$code")
-                    .build()
-
-                val response = client.newCall(request).execute()
-
-                if (!response.isSuccessful) {
-                    response.close()
+                val trackers = TrackerRepository.load(code).getOrElse { error ->
+                    error.printStackTrace()
                     setConnectionState(false)
                     return@thread
                 }
 
-                val body = response.body?.string() ?: "[]"
-                response.close()
-
-                val json = JSONArray(body)
+                val now = System.currentTimeMillis()
 
                 val activeCount =
-                    (0 until json.length()).count { i ->
-                        val item = json.getJSONObject(i)
-                        val active = item.optBoolean("active", false)
-                        val time = item.optLong("time", 0L)
-                        val age = System.currentTimeMillis() - time
-                        active && age < 5 * 60 * 1000
+                    trackers.count { tracker ->
+                        val age = now - tracker.time
+                        tracker.active && age < 5 * 60 * 1000
                     }
 
                 setConnectionState(true, activeCount)
@@ -643,20 +631,18 @@ class MainActivity : ComponentActivity() {
                     map.overlayManager.removeAll(markers.values)
                     markers.clear()
 
-                    for (i in 0 until json.length()) {
-                        val item = json.getJSONObject(i)
-
-                        val name = item.optString("device", "Onbekend")
-                        val lat = item.optDouble("lat", 0.0)
-                        val lng = item.optDouble("lng", 0.0)
-                        val active = item.optBoolean("active", false)
-                        val time = item.optLong("time", 0L)
-                        val age = System.currentTimeMillis() - time
+                    for (tracker in trackers) {
+                        val name = tracker.name
+                        val lat = tracker.lat
+                        val lng = tracker.lng
+                        val active = tracker.active
+                        val time = tracker.time
+                        val age = now - time
                         val recent = age < 5 * 60 * 1000
                         val expired = age > 999 * 1000
-                        val sos = item.optBoolean("sos", false)
-                        val accuracy = item.optDouble("accuracy", 999.0)
-                        val battery = item.optInt("battery", -1)
+                        val sos = tracker.sos
+                        val accuracy = tracker.accuracy
+                        val battery = tracker.battery
 
                         if (!active) continue
                         if (expired) continue
