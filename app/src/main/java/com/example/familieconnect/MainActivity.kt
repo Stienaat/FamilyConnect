@@ -331,7 +331,7 @@ class MainActivity : ComponentActivity() {
             setColor(color)
         }
     }
-            
+
     private val permissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -411,116 +411,17 @@ class MainActivity : ComponentActivity() {
                 val now = System.currentTimeMillis()
 
                 val activeCount =
-                    trackers.count { tracker ->
-                        val age = now - tracker.time
-                        tracker.active && age < 5 * 60 * 1000
-                    }
+                    countActiveTrackers(trackers, now)
 
                 setConnectionState(true, activeCount)
 
-                val info = StringBuilder()
+                val status =
+                    buildStatusText(trackers, now)
 
                 runOnUiThread {
-                    map.overlayManager.removeAll(markers.values)
-                    markers.clear()
 
-                    for (tracker in trackers) {
-                        val name = tracker.name
-                        val lat = tracker.lat
-                        val lng = tracker.lng
-                        val active = tracker.active
-                        val time = tracker.time
-                        val age = now - time
-                        val recent = age < 5 * 60 * 1000
-                        val expired = age > 999 * 1000
-                        val sos = tracker.sos
-                        val accuracy = tracker.accuracy
-                        val battery = tracker.battery
+                    updateMarkers(trackers, now)
 
-                        if (!active) continue
-                        if (expired) continue
-
-                        val seconds =
-                            kotlin.math.min(age / 1000, 999)
-
-                        val batteryIcon =
-                            when {
-                                battery >= 50 -> "🟢 accu"
-                                battery >= 25 -> "🟠 accu"
-                                else -> "🔴 accu"
-                            }
-
-                        info.append(
-                            String.format(
-                                "%-6s %3ds | %3dm | %s\n",
-                                name.take(6),
-                                seconds,
-                                accuracy.toInt(),
-                                batteryIcon
-                            )
-                        )
-
-                        val iconRes = when {
-                            accuracy <= 25 -> R.drawable.marker_green
-                            accuracy <= 75 -> R.drawable.marker_orange
-                            else -> R.drawable.marker_red
-                        }
-
-                        if (map.parent == null) {
-                            continue
-                        }
-
-                        val point = GeoPoint(lat, lng)
-                        markerPositions[name] = point
-
-                        if (followDevice == name) {
-                            map.controller.animateTo(point)
-                        }
-
-                        if (sos && recent && !zoomedSosDevices.contains(name)) {
-                            zoomedSosDevices.add(name)
-                            map.controller.animateTo(point)
-                        }
-
-                        if (!sos) {
-                            zoomedSosDevices.remove(name)
-                        }
-
-
-
-                        val marker = Marker(map).apply {
-                            position = point
-
-                            icon = MarkerIconFactory.create(
-                                resources = resources,
-                                baseDrawableId = iconRes,
-                                label = name,
-                                sos = sos && recent,
-                                follow = followDevice == name
-                            )
-
-                            alpha = if (recent) 1.0f else 0.35f
-                            title = null
-                            snippet = null
-                            closeInfoWindow()
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-
-                            setOnMarkerClickListener { clickedMarker, _ ->
-                                followDevice =
-                                    if (followDevice == name) null else name
-
-                                map.controller.animateTo(clickedMarker.position)
-                                true
-                            }
-                        }
-
-                        map.overlayManager.add(marker)
-                        markers[name] = marker
-
-
-                    }
-
-                    val status = info.toString()
                     txtStatus.text = status
                     adminStatusText?.text = status
 
@@ -535,6 +436,135 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun countActiveTrackers(
+        trackers: List<Tracker>,
+        now: Long
+    ): Int {
+
+        return trackers.count { tracker ->
+            val age = now - tracker.time
+            tracker.active && age < 5 * 60 * 1000
+        }
+    }
+
+    private fun buildStatusText(
+        trackers: List<Tracker>,
+        now: Long
+    ): String {
+        val info = StringBuilder()
+
+        for (tracker in trackers) {
+            val age = now - tracker.time
+            val expired = age > 999 * 1000
+
+            if (!tracker.active) continue
+            if (expired) continue
+
+            val seconds =
+                kotlin.math.min(age / 1000, 999)
+
+            val batteryIcon =
+                when {
+                    tracker.battery >= 50 -> "🟢 accu"
+                    tracker.battery >= 25 -> "🟠 accu"
+                    else -> "🔴 accu"
+                }
+
+            info.append(
+                String.format(
+                    "%-6s %3ds | %3dm | %s\n",
+                    tracker.name.take(6),
+                    seconds,
+                    tracker.accuracy.toInt(),
+                    batteryIcon
+                )
+            )
+        }
+
+        return info.toString()
+    }
+
+    private fun updateMarkers(
+        trackers: List<Tracker>,
+        now: Long
+    ) {      map.overlayManager.removeAll(markers.values)
+        markers.clear()
+
+        for (tracker in trackers) {
+            val name = tracker.name
+            val lat = tracker.lat
+            val lng = tracker.lng
+            val active = tracker.active
+            val time = tracker.time
+            val age = now - time
+            val recent = age < 5 * 60 * 1000
+            val expired = age > 999 * 1000
+            val sos = tracker.sos
+            val accuracy = tracker.accuracy
+            val battery = tracker.battery
+
+            if (!active) continue
+            if (expired) continue
+
+            val iconRes = when {
+                accuracy <= 25 -> R.drawable.marker_green
+                accuracy <= 75 -> R.drawable.marker_orange
+                else -> R.drawable.marker_red
+            }
+
+            if (map.parent == null) {
+                continue
+            }
+
+            val point = GeoPoint(lat, lng)
+            markerPositions[name] = point
+
+            if (followDevice == name) {
+                map.controller.animateTo(point)
+            }
+
+            if (sos && recent && !zoomedSosDevices.contains(name)) {
+                zoomedSosDevices.add(name)
+                map.controller.animateTo(point)
+            }
+
+            if (!sos) {
+                zoomedSosDevices.remove(name)
+            }
+
+
+
+            val marker = Marker(map).apply {
+                position = point
+
+                icon = MarkerIconFactory.create(
+                    resources = resources,
+                    baseDrawableId = iconRes,
+                    label = name,
+                    sos = sos && recent,
+                    follow = followDevice == name
+                )
+
+                alpha = if (recent) 1.0f else 0.35f
+                title = null
+                snippet = null
+                closeInfoWindow()
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+
+                setOnMarkerClickListener { clickedMarker, _ ->
+                    followDevice =
+                        if (followDevice == name) null else name
+
+                    map.controller.animateTo(clickedMarker.position)
+                    true
+                }
+            }
+
+            map.overlayManager.add(marker)
+            markers[name] = marker
+        }
+
+    }
 
     private fun requestDisableBatteryOptimization() {
         val packageName = packageName
