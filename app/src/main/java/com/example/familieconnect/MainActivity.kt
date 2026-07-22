@@ -63,12 +63,7 @@ class MainActivity : ComponentActivity() {
     // Tracker map state
     // --------------------------------------------------
 
-    private val markers = mutableMapOf<String, Marker>()
-    private val markerPositions = mutableMapOf<String, GeoPoint>()
-    private val zoomedSosDevices = mutableSetOf<String>()
-
-    private var followDevice: String? = null
-
+      private val trackerState = TrackerState()
 
     // --------------------------------------------------
     // App state
@@ -142,10 +137,10 @@ class MainActivity : ComponentActivity() {
         txtStatus.setOnClickListener {
 
             val firstName =
-                markerPositions.keys.firstOrNull()
+                trackerState.markerPositions.keys.firstOrNull()
 
             if (firstName != null) {
-                val point = markerPositions[firstName]
+                val point = trackerState.markerPositions[firstName]
 
                 if (point != null) {
                     map.controller.animateTo(point)
@@ -185,7 +180,7 @@ class MainActivity : ComponentActivity() {
 
                 if (now - lastTapTime < 350) {
 
-                    val names = markerPositions.keys.sorted()
+                    val names = trackerState.markerPositions.keys.sorted()
 
                     if (names.isNotEmpty()) {
 
@@ -193,7 +188,7 @@ class MainActivity : ComponentActivity() {
                             zoomIndex = 0
                         }
 
-                        val point = markerPositions[names[zoomIndex]]
+                        val point = trackerState.markerPositions[names[zoomIndex]]
 
                         if (point != null) {
                             map.controller.animateTo(point)
@@ -523,8 +518,8 @@ class MainActivity : ComponentActivity() {
     private fun updateMarkers(
         trackers: List<Tracker>,
         now: Long
-    ) {      map.overlayManager.removeAll(markers.values)
-        markers.clear()
+    ) {      map.overlayManager.removeAll(trackerState.markers.values)
+        trackerState.markers.clear()
 
         for (tracker in trackers) {
             val name = tracker.name
@@ -553,7 +548,7 @@ class MainActivity : ComponentActivity() {
             }
 
             val point = GeoPoint(lat, lng)
-            markerPositions[name] = point
+            trackerState.markerPositions[name] = point
 
             updateTrackerFocus(
                 name = name,
@@ -570,7 +565,7 @@ class MainActivity : ComponentActivity() {
                     baseDrawableId = iconRes,
                     label = name,
                     sos = sos && recent,
-                    follow = followDevice == name
+                    follow = trackerState.followDevice == name
                 )
 
                 alpha = if (recent) 1.0f else 0.35f
@@ -580,8 +575,8 @@ class MainActivity : ComponentActivity() {
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
 
                 setOnMarkerClickListener { clickedMarker, _ ->
-                    followDevice =
-                        if (followDevice == name) null else name
+                    trackerState.followDevice =
+                        if (trackerState.followDevice == name) null else name
 
                     map.controller.animateTo(clickedMarker.position)
                     true
@@ -589,7 +584,7 @@ class MainActivity : ComponentActivity() {
             }
 
             map.overlayManager.add(marker)
-            markers[name] = marker
+            trackerState.markers[name] = marker
         }
     }
 
@@ -599,17 +594,17 @@ class MainActivity : ComponentActivity() {
         sos: Boolean,
         recent: Boolean
     ) {
-        if (followDevice == name) {
+        if (trackerState.followDevice == name) {
             map.controller.animateTo(point)
         }
 
-        if (sos && recent && !zoomedSosDevices.contains(name)) {
-            zoomedSosDevices.add(name)
+        if (sos && recent && !trackerState.zoomedSosDevices.contains(name)) {
+            trackerState.zoomedSosDevices.add(name)
             map.controller.animateTo(point)
         }
 
         if (!sos) {
-            zoomedSosDevices.remove(name)
+            trackerState.zoomedSosDevices.remove(name)
         }
     }
 
