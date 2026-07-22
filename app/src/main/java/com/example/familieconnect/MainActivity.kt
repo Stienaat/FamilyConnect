@@ -30,30 +30,66 @@ import android.text.method.ScrollingMovementMethod
 
 class MainActivity : ComponentActivity() {
 
-    private val client = OkHttpClient()
-    private lateinit var map: MapView
-    private lateinit var btnConnected: Button
-    private lateinit var txtStatus: android.widget.TextView
-    private lateinit var txtMapAttribution: TextView
-    private lateinit var btnSos: Button
-    private var adminStatusText: TextView? = null
-    private var trackingOn = true
-    private var sosOn = false
+    // --------------------------------------------------
+    // Configuration
+    // --------------------------------------------------
+
     private val ADMIN_PIN = "1234"
     private val DEFAULT_GROUP_CODE = "1234"
+
+
+    // --------------------------------------------------
+    // Networking
+    // --------------------------------------------------
+
+    private val client = OkHttpClient()
+
+
+    // --------------------------------------------------
+    // UI
+    // --------------------------------------------------
+
+    private lateinit var map: MapView
+    private lateinit var btnConnected: Button
+    private lateinit var btnSos: Button
+    private lateinit var txtStatus: TextView
+    private lateinit var txtMapAttribution: TextView
+    private lateinit var nameInput: EditText
+
+    private var adminStatusText: TextView? = null
+
+
+    // --------------------------------------------------
+    // Tracker map state
+    // --------------------------------------------------
+
     private val markers = mutableMapOf<String, Marker>()
     private val markerPositions = mutableMapOf<String, GeoPoint>()
-    private var connectedOn = false
-    private lateinit var nameInput: EditText
     private val zoomedSosDevices = mutableSetOf<String>()
 
-    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private var refreshTask: Runnable? = null
-    private var activityAlive = false
-    private var zoomIndex = 0
-    private var lastTapTime = 0L
     private var followDevice: String? = null
 
+
+    // --------------------------------------------------
+    // App state
+    // --------------------------------------------------
+
+    private var trackingOn = true
+    private var sosOn = false
+    private var connectedOn = false
+    private var activityAlive = false
+
+
+    // --------------------------------------------------
+    // Refresh and interaction state
+    // --------------------------------------------------
+
+    private val handler =
+        android.os.Handler(android.os.Looper.getMainLooper())
+
+    private var refreshTask: Runnable? = null
+    private var zoomIndex = 0
+    private var lastTapTime = 0L
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activityAlive = true
@@ -519,20 +555,12 @@ class MainActivity : ComponentActivity() {
             val point = GeoPoint(lat, lng)
             markerPositions[name] = point
 
-            if (followDevice == name) {
-                map.controller.animateTo(point)
-            }
-
-            if (sos && recent && !zoomedSosDevices.contains(name)) {
-                zoomedSosDevices.add(name)
-                map.controller.animateTo(point)
-            }
-
-            if (!sos) {
-                zoomedSosDevices.remove(name)
-            }
-
-
+            updateTrackerFocus(
+                name = name,
+                point = point,
+                sos = sos,
+                recent = recent
+            )
 
             val marker = Marker(map).apply {
                 position = point
@@ -563,8 +591,29 @@ class MainActivity : ComponentActivity() {
             map.overlayManager.add(marker)
             markers[name] = marker
         }
-
     }
+
+    private fun updateTrackerFocus(
+        name: String,
+        point: GeoPoint,
+        sos: Boolean,
+        recent: Boolean
+    ) {
+        if (followDevice == name) {
+            map.controller.animateTo(point)
+        }
+
+        if (sos && recent && !zoomedSosDevices.contains(name)) {
+            zoomedSosDevices.add(name)
+            map.controller.animateTo(point)
+        }
+
+        if (!sos) {
+            zoomedSosDevices.remove(name)
+        }
+    }
+
+
 
     private fun requestDisableBatteryOptimization() {
         val packageName = packageName
